@@ -1,0 +1,251 @@
+{
+  "name": "Error Workflow",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "97c84c61-54ab-4798-9575-00b6e924dfa6",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -448,
+        224
+      ],
+      "notes": "N8N activa este workflow automáticamente cuando cualquier otro workflow configurado falla. Recibe: $json.execution (id, name, status), $json.error (message, stack), $json.workflow (id, name)."
+    },
+    {
+      "parameters": {
+        "schema": "public",
+        "table": {
+          "__rl": true,
+          "value": "workflow_error_log",
+          "mode": "list",
+          "cachedResultName": "workflow_error_log"
+        },
+        "dataMode": "defineBelow",
+        "valuesToSend": {
+          "values": [
+            {
+              "column": "workflow_id",
+              "value": "={{ $json.workflow.id }}"
+            },
+            {
+              "column": "workflow_name",
+              "value": "={{ $json.workflow.name }}"
+            },
+            {
+              "column": "execution_id",
+              "value": "={{ $json.execution.id }}"
+            },
+            {
+              "column": "error_message",
+              "value": "={{ $json.execution.error.message }}"
+            },
+            {
+              "column": "error_stack",
+              "value": "={{ $json.execution.error.stack }}"
+            },
+            {
+              "column": "node_name",
+              "value": "={{ $json.execution.lastNodeExecuted }}"
+            },
+            {
+              "column": "error_message",
+              "value": "={{ JSON.stringify($json) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b35251a2-583a-46a7-9ac1-b934d39edddb",
+      "name": "Guardar Error en PostgreSQL",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        0,
+        32
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "ahDg84fXlMYqUivC",
+          "name": "Postgres account"
+        }
+      },
+      "notes": "Inserta el error en la tabla workflow_errors. Persiste indefinidamente (sin purga automática)."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "53e1dec9-aaa4-4629-87cd-6c379e8e1cc4",
+              "leftValue": "={{ $json.execution.mode }}",
+              "rightValue": "manual",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -224,
+        224
+      ],
+      "id": "65718cd6-1fe8-44ce-be2c-9ff3c697f50d",
+      "name": "If"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        0,
+        224
+      ],
+      "id": "11052e9a-8eef-4340-9f76-476305a6c51b",
+      "name": "No Operation, do nothing"
+    },
+    {
+      "parameters": {
+        "operation": "push",
+        "list": "workflow:errors",
+        "messageData": "={{ JSON.stringify($json) }}"
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        0,
+        416
+      ],
+      "id": "2ef5ef4e-8f5e-428d-982c-83f7ed0b06ee",
+      "name": "Guardar error en Redis",
+      "credentials": {
+        "redis": {
+          "id": "Red2RMln7G8hclNH",
+          "name": "Redis account"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        224,
+        224
+      ],
+      "id": "a1a5d6a2-c9e6-47f2-8d80-4f0aed8cbc19",
+      "name": "[Placeholder] Notificar Administrador"
+    }
+  ],
+  "pinData": {
+    "Guardar Error en PostgreSQL": [
+      {
+        "json": {
+          "id": "de04c695-7f08-4288-93e9-2458eac39d55",
+          "workflow_id": "1",
+          "workflow_name": "Example Workflow",
+          "execution_id": "231",
+          "error_message": "Example Error Message",
+          "error_stack": "Stacktrace",
+          "payload": null,
+          "node_name": "Node With Error",
+          "created_at": "2026-03-21T15:42:29.799Z"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar Error en PostgreSQL": {
+      "main": [
+        [
+          {
+            "node": "[Placeholder] Notificar Administrador",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Guardar Error en PostgreSQL",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Guardar error en Redis",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Operation, do nothing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar error en Redis": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "3af1bcd7-5655-4470-ba4d-193121db6f1f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "5802f9ffa8035643c254dac9e70c7558cce708bba6f0a8205b16cdfdc5f6b1c5"
+  },
+  "id": "Ef2tiyXZ0V1pO3UqbuF8E",
+  "tags": [
+    {
+      "updatedAt": "2026-03-21T15:27:15.236Z",
+      "createdAt": "2026-03-21T15:27:15.236Z",
+      "id": "r5SyzuMGskMtBhj6",
+      "name": "errors"
+    },
+    {
+      "updatedAt": "2026-03-21T15:27:15.228Z",
+      "createdAt": "2026-03-21T15:27:15.228Z",
+      "id": "kj3tMZNA1GDzMfyM",
+      "name": "observabilidad"
+    }
+  ]
+}

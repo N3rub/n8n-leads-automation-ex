@@ -1,0 +1,1100 @@
+{
+  "name": "Sincronizacion CRM",
+  "nodes": [
+    {
+      "parameters": {
+        "queue": "leads.crm-sync",
+        "options": {
+          "acknowledge": "laterMessageNode"
+        }
+      },
+      "type": "n8n-nodes-base.rabbitmqTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        64
+      ],
+      "id": "1db7b7a3-5525-4bd9-a433-8c5d4f259c22",
+      "name": "RabbitMQ Trigger",
+      "credentials": {
+        "rabbitmq": {
+          "id": "iCBS6ALiWliy1jtp",
+          "name": "RabbitMQ account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={{ {...$json.content.parseJson(), _started_at: $now } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        64
+      ],
+      "id": "8d415cea-afcb-4677-a8f2-2044a3c88ad2",
+      "name": "Parsear"
+    },
+    {
+      "parameters": {
+        "authentication": "appToken",
+        "email": "={{ $json.lead.email }}",
+        "additionalFields": {
+          "companyName": "={{ $json.enriched_data.company.name }}",
+          "firstName": "={{ $json.lead.first_name }}",
+          "jobFunction": "={{ $json.enriched_data.person.role }}",
+          "jobTitle": "={{ $json.enriched_data.person.role }}",
+          "lastName": "={{ $json.lead.last_name }}",
+          "linkedinUrl": "={{ $json.enriched_data.person.linkedin }}",
+          "mobilePhoneNumber": "={{ $json.lead.phone }}"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        64
+      ],
+      "id": "e4a26335-ffd5-419b-b657-59121f1909e0",
+      "name": "Create or update a contact",
+      "retryOnFail": true,
+      "credentials": {
+        "hubspotAppToken": {
+          "id": "7IHVhPat2Eml1vee",
+          "name": "HubSpot App Token account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "leads",
+          "mode": "list",
+          "cachedResultName": "leads"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "synced",
+            "crm_id": "={{ $json.id ?? $json.vid ?? '' }}",
+            "crm_synced_at": "={{ $now }}",
+            "processed_at": "={{ $now }}",
+            "external_id": "={{ $('Parsear').item.json.external_id }}"
+          },
+          "matchingColumns": [
+            "external_id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "external_id",
+              "displayName": "external_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "dedup_hash",
+              "displayName": "dedup_hash",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "email_normalized",
+              "displayName": "email_normalized",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "first_name",
+              "displayName": "first_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "last_name",
+              "displayName": "last_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "company",
+              "displayName": "company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "utm_source",
+              "displayName": "utm_source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "utm_medium",
+              "displayName": "utm_medium",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "utm_campaign",
+              "displayName": "utm_campaign",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "enriched_data",
+              "displayName": "enriched_data",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "object",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "crm_id",
+              "displayName": "crm_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "crm_synced_at",
+              "displayName": "crm_synced_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "raw_payload",
+              "displayName": "raw_payload",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "object",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "error_message",
+              "displayName": "error_message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "retry_count",
+              "displayName": "retry_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "ingested_at",
+              "displayName": "ingested_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "processed_at",
+              "displayName": "processed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "outputColumns": [
+            "id",
+            "external_id",
+            "crm_id"
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        896,
+        -48
+      ],
+      "id": "55156f65-9231-41f4-929f-a121f48de405",
+      "name": "Actualizar lead",
+      "credentials": {
+        "postgres": {
+          "id": "ahDg84fXlMYqUivC",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "deleteMessage"
+      },
+      "type": "n8n-nodes-base.rabbitmq",
+      "typeVersion": 1.1,
+      "position": [
+        1120,
+        -48
+      ],
+      "id": "f2d64aa7-51e5-463d-855d-df2d6628eb9f",
+      "name": "RabbitMQ ACK",
+      "credentials": {
+        "rabbitmq": {
+          "id": "iCBS6ALiWliy1jtp",
+          "name": "RabbitMQ account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const statusCode  = $json.statusCode ?? 0;\nconst error   = $json.error ?? $json.message ?? 'Unknown error';\nconst attempt = $('Parsear').first().json.meta?.attempt ?? 1;\nconst maxAttempts = 3;\n\nconst isRateLimit    = statusCode === 429;\nconst isServerError  = statusCode === 0 || statusCode >= 500;\nconst isRetryable = isRateLimit || isServerError;\nconst exhausted        = attempt >= maxAttempts;\n\nconst waitSeconds = isRateLimit\n  ? 60\n  : Math.pow(2, attempt) * 30;\n\nreturn {\n  json: {\n    ...$('Parsear').first().json,\n    error_class: {\n      isRetryable,\n      exhausted,\n      waitSeconds,\n      attempt,\n      errorMessage: error,\n      statusCode\n    }\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        160
+      ],
+      "id": "9738bea3-7f66-47fc-b64e-a6bd810981c0",
+      "name": "Clasificar Error"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "a009be6a-421e-4dc5-86c3-91d64a4c7608",
+              "leftValue": "={{ $json.error ?? '' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        672,
+        64
+      ],
+      "id": "cd41c568-f5c4-467b-aa0f-197bcbc0e299",
+      "name": "¿Sin error?"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "leads",
+          "mode": "list",
+          "cachedResultName": "leads"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "error",
+            "error_message": "={{ $json.error_class.errorMessage }}",
+            "retry_count": "={{ $json.error_class.attempt }}",
+            "external_id": "={{ $('Parsear').item.json.external_id }}"
+          },
+          "matchingColumns": [
+            "external_id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "external_id",
+              "displayName": "external_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "dedup_hash",
+              "displayName": "dedup_hash",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "email_normalized",
+              "displayName": "email_normalized",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "first_name",
+              "displayName": "first_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "last_name",
+              "displayName": "last_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "company",
+              "displayName": "company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "utm_source",
+              "displayName": "utm_source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "utm_medium",
+              "displayName": "utm_medium",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "utm_campaign",
+              "displayName": "utm_campaign",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "enriched_data",
+              "displayName": "enriched_data",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "object",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "crm_id",
+              "displayName": "crm_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "crm_synced_at",
+              "displayName": "crm_synced_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "raw_payload",
+              "displayName": "raw_payload",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "object",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "error_message",
+              "displayName": "error_message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "retry_count",
+              "displayName": "retry_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ingested_at",
+              "displayName": "ingested_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "processed_at",
+              "displayName": "processed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1344,
+        64
+      ],
+      "id": "35b70d8f-6dc4-498b-935d-bd476d8a4017",
+      "name": "Actualizar status lead",
+      "credentials": {
+        "postgres": {
+          "id": "ahDg84fXlMYqUivC",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "fe9e036c-3018-4174-b16f-0afc464fbf5e",
+                    "leftValue": "={{ $json.error_class.exhausted }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Intentos Agotados"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "c8838993-6c9b-43ea-aae8-a37fe197d4e3",
+                    "leftValue": "={{ $json.error_class.isRetryable }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "false",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "No Reintentable"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.error_class.isRetryable }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    },
+                    "id": "a3b2318c-abda-429a-a318-d7005ff1bb37"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Reintentable"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        1120,
+        144
+      ],
+      "id": "c4ec6d19-5aad-4c27-9899-836c29271f80",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "amount": "={{ $json.error_class.waitSeconds }}"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1344,
+        256
+      ],
+      "id": "cf2a58e6-6030-466d-acc7-dd2188aaaadd",
+      "name": "Wait",
+      "webhookId": "f39a0093-3fdd-40be-8483-3822b0472f65"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return {\n  json: {\n    ...$('Parsear').item.json,\n    meta: {\n      attempt:          $json.error_class.attempt + 1,\n      first_attempt_at: $json.meta?.first_attempt_at ?? new Date().toISOString(),\n      last_error:       $json.error_class.errorMessage\n    }\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        256
+      ],
+      "id": "5b100f5f-f649-4fc7-885b-eeaeb34f281a",
+      "name": "Preparar re-encolado"
+    },
+    {
+      "parameters": {
+        "mode": "exchange",
+        "exchange": "leads",
+        "routingKey": "lead.enriched",
+        "options": {
+          "headers": {
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.rabbitmq",
+      "typeVersion": 1.1,
+      "position": [
+        1792,
+        256
+      ],
+      "id": "83b18506-dab1-4b0b-b4cb-a1a1972cd32c",
+      "name": "RabbitMQ Reencolar",
+      "credentials": {
+        "rabbitmq": {
+          "id": "iCBS6ALiWliy1jtp",
+          "name": "RabbitMQ account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "deleteMessage"
+      },
+      "type": "n8n-nodes-base.rabbitmq",
+      "typeVersion": 1.1,
+      "position": [
+        1568,
+        64
+      ],
+      "id": "7cf1cb4b-3b58-4f20-9732-3aad8e99d009",
+      "name": "RabbitMQ ACK-2",
+      "credentials": {
+        "rabbitmq": {
+          "id": "iCBS6ALiWliy1jtp",
+          "name": "RabbitMQ account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "deleteMessage"
+      },
+      "type": "n8n-nodes-base.rabbitmq",
+      "typeVersion": 1.1,
+      "position": [
+        2016,
+        256
+      ],
+      "id": "128234b7-4c65-4db8-afdd-58e2e56ed108",
+      "name": "RabbitMQ ACK-3",
+      "credentials": {
+        "rabbitmq": {
+          "id": "iCBS6ALiWliy1jtp",
+          "name": "RabbitMQ account"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "RabbitMQ Trigger": [
+      {
+        "json": {
+          "fields": {
+            "deliveryTag": 1,
+            "redelivered": false,
+            "exchange": "leads",
+            "routingKey": "lead.enriched",
+            "messageCount": 0
+          },
+          "properties": {
+            "headers": {}
+          },
+          "content": "{\"lead\":{\"email\":\"jane@empresa.com\",\"email_normalized\":\"jane@empresa.com\",\"phone\":\"\",\"first_name\":\"Jane\",\"last_name\":\"Doe\",\"company\":\"\",\"source\":\"web_form\",\"utm_source\":\"\",\"utm_medium\":\"\",\"utm_campaign\":\"\",\"ingested_at\":\"2026-03-21T19:43:11.857Z\",\"raw_payload\":{\"email\":\"jane@empresa.com\",\"first_name\":\"Jane\",\"last_name\":\"Doe\",\"source\":\"web_form\"}},\"dedup_hash\":\"179340a8e4516226e311df111e4e09e3046a496494ced264b88ebd7b6205bf52\",\"external_id\":\"e84b3b58-016f-4373-8d59-60c9f5ae423c\",\"enriched_data\":{\"person\":{\"first_name\":\"John\",\"last_name\":\"Doe\",\"role\":\"Senior Developer\",\"linkedin\":\"linkedin.com/in/johndoe\"},\"company\":{\"name\":\"Mock Corp\",\"sector\":\"Tech\",\"employees\":500}}}"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "Create or update a contact": [
+      {
+        "json": {
+          "error": "The DNS server returned an error, perhaps the server is offline"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "RabbitMQ Trigger": {
+      "main": [
+        [
+          {
+            "node": "Parsear",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parsear": {
+      "main": [
+        [
+          {
+            "node": "Create or update a contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create or update a contact": {
+      "main": [
+        [
+          {
+            "node": "¿Sin error?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actualizar lead": {
+      "main": [
+        [
+          {
+            "node": "RabbitMQ ACK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Sin error?": {
+      "main": [
+        [
+          {
+            "node": "Actualizar lead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Clasificar Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clasificar Error": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actualizar status lead": {
+      "main": [
+        [
+          {
+            "node": "RabbitMQ ACK-2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Actualizar status lead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Actualizar status lead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Preparar re-encolado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar re-encolado": {
+      "main": [
+        [
+          {
+            "node": "RabbitMQ Reencolar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RabbitMQ Reencolar": {
+      "main": [
+        [
+          {
+            "node": "RabbitMQ ACK-3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RabbitMQ ACK-2": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "executionTimeout": -1,
+    "errorWorkflow": "Ef2tiyXZ0V1pO3UqbuF8E"
+  },
+  "versionId": "6217d326-0e13-4e1f-8e9d-c927eb60942e",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "5802f9ffa8035643c254dac9e70c7558cce708bba6f0a8205b16cdfdc5f6b1c5"
+  },
+  "id": "ImsuaTBYadFevyHN02NkI",
+  "tags": []
+}

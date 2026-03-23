@@ -1,0 +1,429 @@
+{
+  "name": "Lead Input WF",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "leads/ingest",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "9bae4490-25a6-40e5-a138-dc6da9e6e994",
+      "name": "Webhook – Recibir Lead",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -656,
+        160
+      ],
+      "webhookId": "3939825e-6a06-4f28-afa1-522fab837749",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "soV5449HU15WjLdE",
+          "name": "Header Auth account"
+        }
+      },
+      "notes": "Endpoint: POST /webhook/leads/ingest\nHeader requerido: X-API-Key"
+    },
+    {
+      "parameters": {
+        "jsCode": "// -------------------------------------------------------\n// AUTH — Header Auth lo verifica n8n antes de llegar aquí\n// pero validamos igualmente por defensa en profundidad\n// -------------------------------------------------------\nconst item = $input.first().json.body;\n\n// -------------------------------------------------------\n// CAMPOS OBLIGATORIOS\n// -------------------------------------------------------\nconst required = ['email', 'first_name'];\nconst missing = required.filter(\n  f => !item[f] || String(item[f]).trim() === ''\n);\nif (missing.length > 0) {\n  return [{ json: {\n    valid: false,\n    status: 400,\n    errors: missing.map(f => `Campo obligatorio ausente: '${f}'`)\n  }}];\n}\n\n// -------------------------------------------------------\n// VALIDACIÓN EMAIL\n// -------------------------------------------------------\nconst emailRegex = /^[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}$/;\nconst emailNormalized = String(item.email).trim().toLowerCase();\nif (!emailRegex.test(emailNormalized)) {\n  return [{ json: {\n    valid: false,\n    status: 400,\n    errors: [`Email inválido: '${item.email}'`]\n  }}];\n}\n\n// -------------------------------------------------------\n// SANITIZAR\n// -------------------------------------------------------\nconst sanitize = (val) => {\n  if (typeof val !== 'string') return val;\n  return val.replace(/<[^>]*>/g, '').trim();\n};\n\n// -------------------------------------------------------\n// PAYLOAD LIMPIO\n// -------------------------------------------------------\nreturn [{\n  json: {\n    valid: true,\n    status: 202,\n    lead: {\n      email:            item.email,\n      email_normalized: emailNormalized,\n      phone:            sanitize(item.phone        ?? ''),\n      first_name:       sanitize(item.first_name),\n      last_name:        sanitize(item.last_name    ?? ''),\n      company:          sanitize(item.company      ?? ''),\n      source:           sanitize(item.source       ?? 'unknown'),\n      utm_source:       sanitize(item.utm_source   ?? ''),\n      utm_medium:       sanitize(item.utm_medium   ?? ''),\n      utm_campaign:     sanitize(item.utm_campaign ?? ''),\n      ingested_at:      new Date().toISOString(),\n      raw_payload:      item\n    }\n  }\n}];"
+      },
+      "id": "630eab96-f525-42e8-98df-8de10404917a",
+      "name": "Validar y Normalizar Lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -432,
+        160
+      ],
+      "notes": "Validación y normalización en Code node (NO en custom node).\nMotivo: la estructura del lead es lógica de negocio que cambia.\nEditar aquí desde la UI sin recompilar nada."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "check-valid",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "774fcabc-c3bd-4432-b538-436b1f30829e",
+      "name": "¿Lead inválido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -208,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: 'Validation failed', details: $json.errors }) }}",
+        "options": {
+          "responseCode": 422
+        }
+      },
+      "id": "f9c17c21-ae1d-4cd0-88b4-f00b42250ab7",
+      "name": "Responder 422",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        16,
+        64
+      ],
+      "notes": "422 Unprocessable: datos recibidos pero con errores de validación."
+    },
+    {
+      "parameters": {
+        "mode": "exchange",
+        "exchange": "leads",
+        "routingKey": "lead.received",
+        "sendInputData": false,
+        "message": "={{ JSON.stringify({\n  lead: $('Agregar dedup_hash').item.json.lead,\n  dedup_hash: $('Agregar dedup_hash').item.json.dedup_hash,\n  external_id: $json.external_id,\n  meta: { attempt: 1, first_attempt_at: new Date().toISOString(), last_error: null }\n}) }}",
+        "options": {
+          "headers": {
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "98ffe3c3-8c5c-4c9f-9ab7-b7bf7942edec",
+      "name": "RabbitMQ – Publicar",
+      "type": "n8n-nodes-base.rabbitmq",
+      "typeVersion": 1,
+      "position": [
+        912,
+        352
+      ],
+      "credentials": {
+        "rabbitmq": {
+          "id": "iCBS6ALiWliy1jtp",
+          "name": "RabbitMQ account"
+        }
+      },
+      "notes": "Publica en leads.exchange con routing key 'lead.ingested'.\nEl binding en RabbitMQ lo enruta a la cola leads.ingested."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"status\": \"accepted\", \"id\": $json.external_id } }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "cb31b70b-bbe4-45e6-bb9d-a015a146ecfb",
+      "name": "Responder 202 Accepted",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1136,
+        352
+      ],
+      "notes": "202: recibido y encolado. El procesamiento es asíncrono.\nEl cliente recibe el external_id para trazabilidad."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "64bcb635-8bdb-4bcc-a582-b0bc1ebd22d2",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        464,
+        256
+      ],
+      "id": "b09f50f2-e0c9-4813-a34c-7d6a5f56f18a",
+      "name": "¿Existe?"
+    },
+    {
+      "parameters": {
+        "operation": "select",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "leads",
+          "mode": "list",
+          "cachedResultName": "leads"
+        },
+        "limit": 1,
+        "where": {
+          "values": [
+            {
+              "column": "dedup_hash",
+              "value": "={{ $json.dedup_hash }}"
+            }
+          ]
+        },
+        "options": {
+          "outputColumns": [
+            "id",
+            "external_id",
+            "status"
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        240,
+        256
+      ],
+      "id": "c907ba8c-05e0-48ea-ba31-7306b937a83e",
+      "name": "Buscar registro",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "ahDg84fXlMYqUivC",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "action": "generate",
+        "dataPropertyName": "external_id"
+      },
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        688,
+        352
+      ],
+      "id": "1b2370e8-996a-4f52-b7ca-c571d9ba6e13",
+      "name": "Gen external_id UUID"
+    },
+    {
+      "parameters": {
+        "operations": {
+          "items": [
+            {
+              "mode": "expression",
+              "sourceExpression": "={{ $json.lead.email_normalized + ':' + $json.lead.phone.replace(/\\s+/g, '') }}",
+              "outputField": "dedup_hash"
+            }
+          ]
+        }
+      },
+      "type": "CUSTOM.hashGenerator",
+      "typeVersion": 1,
+      "position": [
+        16,
+        256
+      ],
+      "id": "52c2cf47-167e-43a2-98b2-3a8bb5d63079",
+      "name": "Agregar dedup_hash"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"status\": \"duplicate\", \"errors\": [\"Lead ya existe\"] } }}",
+        "options": {
+          "responseCode": 409
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        688,
+        160
+      ],
+      "id": "0cadecaa-7acd-4505-bf01-484b74cd62d9",
+      "name": "Responder 409"
+    }
+  ],
+  "pinData": {
+    "Webhook – Recibir Lead": [
+      {
+        "json": {
+          "headers": {
+            "host": "localhost",
+            "x-real-ip": "172.20.0.1",
+            "x-forwarded-for": "172.20.0.1",
+            "x-forwarded-proto": "http",
+            "connection": "close",
+            "content-length": "76",
+            "user-agent": "yaak",
+            "accept": "*/*",
+            "x-api-key": "password",
+            "content-type": "application/json"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "email": "jane@empresa.com",
+            "first_name": "Jane",
+            "last_name": "Doe",
+            "source": "web_form"
+          },
+          "webhookUrl": "http://localhost/webhook-test/leads/ingest",
+          "executionMode": "test"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Webhook – Recibir Lead": {
+      "main": [
+        [
+          {
+            "node": "Validar y Normalizar Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar y Normalizar Lead": {
+      "main": [
+        [
+          {
+            "node": "¿Lead inválido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Lead inválido?": {
+      "main": [
+        [
+          {
+            "node": "Responder 422",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Agregar dedup_hash",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RabbitMQ – Publicar": {
+      "main": [
+        [
+          {
+            "node": "Responder 202 Accepted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Existe?": {
+      "main": [
+        [
+          {
+            "node": "Responder 409",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gen external_id UUID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar registro": {
+      "main": [
+        [
+          {
+            "node": "¿Existe?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gen external_id UUID": {
+      "main": [
+        [
+          {
+            "node": "RabbitMQ – Publicar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agregar dedup_hash": {
+      "main": [
+        [
+          {
+            "node": "Buscar registro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "Ef2tiyXZ0V1pO3UqbuF8E"
+  },
+  "versionId": "4a33581e-2a53-487b-95f8-7f9c089f0dec",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "5802f9ffa8035643c254dac9e70c7558cce708bba6f0a8205b16cdfdc5f6b1c5"
+  },
+  "id": "7n1g0iR6_wJExonNeiIKN",
+  "tags": []
+}

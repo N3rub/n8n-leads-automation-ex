@@ -1,0 +1,140 @@
+name: CI — Custom Nodes Build & Deploy
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'n8n/custom-nodes/**'
+      - '.github/workflows/ci-custom-nodes.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'n8n/custom-nodes/**'
+
+env:
+  NODE_VERSION: '18.x'
+  DIST_DIR: dist/custom-nodes
+
+jobs:
+  build:
+    name: Build & Test Custom Nodes
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        node-package:
+          - n8n-nodes-hash-generator
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.30
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+          cache-dependency-path: n8n/custom-nodes/${{ matrix.node-package }}/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: n8n/custom-nodes/${{ matrix.node-package }}
+        run: pnpm install --frozen-lockfile
+
+#      - name: Lint
+#        working-directory: n8n/custom-nodes/${{ matrix.node-package }}
+#        run: pnpm lint
+
+      - name: Test
+        working-directory: n8n/custom-nodes/${{ matrix.node-package }}
+        run: pnpm test --coverage
+        env:
+          CI: true
+
+      - name: Build (tsc)
+        working-directory: n8n/custom-nodes/${{ matrix.node-package }}
+        run: pnpm build
+
+      - name: Prepare dist artifact
+        run: |
+          mkdir -p ${{ env.DIST_DIR }}/${{ matrix.node-package }}
+          cp -r n8n/custom-nodes/${{ matrix.node-package }}/dist/. \
+                ${{ env.DIST_DIR }}/${{ matrix.node-package }}/
+          cp    n8n/custom-nodes/${{ matrix.node-package }}/package.json \
+                ${{ env.DIST_DIR }}/${{ matrix.node-package }}/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: custom-node-${{ matrix.node-package }}
+          path: ${{ env.DIST_DIR }}/
+          retention-days: 7
+          if-no-files-found: error
+
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-22.04
+    needs: build
+    strategy:
+      matrix:
+        node-package:
+          - n8n-nodes-hash-generator
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.30
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+          cache-dependency-path: n8n/custom-nodes/${{ matrix.node-package }}/pnpm-lock.yaml
+
+      - name: Install
+        working-directory: n8n/custom-nodes/${{ matrix.node-package }}
+        run: pnpm install --frozen-lockfile
+
+      - name: Audit (falla en severidad alta/crítica)
+        working-directory: n8n/custom-nodes/${{ matrix.node-package }}
+        run: pnpm audit --audit-level=high
+
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-22.04
+    needs: [build, security-audit]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: ${{ env.DIST_DIR }}/
+          merge-multiple: true
+
+      - name: Deploy via rsync
+        uses: burnett01/rsync-deployments@7.0.1
+        with:
+          switches: -avzr --delete --checksum
+          path: ${{ env.DIST_DIR }}/
+          remote_path: ${{ secrets.DEPLOY_PATH }}/dist/custom-nodes/
+          remote_host: ${{ secrets.DEPLOY_HOST }}
+          remote_user: ${{ secrets.DEPLOY_USER }}
+          remote_key: ${{ secrets.DEPLOY_SSH_KEY }}
+
+      - name: Restart n8n
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            cd ${{ secrets.DEPLOY_PATH }}
+            docker compose restart n8n-main n8n-worker
+            for i in $(seq 1 12); do
+              STATUS=$(docker inspect --format='{{.State.Health.Status}}' n8n-main 2>/dev/null)
+              [ "$STATUS" = "healthy" ] && echo "[OK] Healthy" && exit 0
+              echo "[OK] Waiting... ($i/12)" && sleep 5
+            done
+            echo "[ERROR] Health check failed" && exit 1

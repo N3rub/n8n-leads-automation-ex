@@ -1,0 +1,25 @@
+# Secretos — NUNCA al repositorio
+.env.*
+!.env.example.*
+
+# Artefactos de compilación de custom nodes (generados por CI/CD)
+dist/
+
+# Node.js
+node_modules/
+npm-debug.log*
+*.tsbuildinfo
+
+# Cobertura de tests
+coverage/
+
+# macOS
+.DS_Store
+
+# IDEs
+.vscode/settings.json
+.idea/
+*.swp
+
+# Logs
+*.log

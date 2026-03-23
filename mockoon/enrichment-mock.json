@@ -1,0 +1,20 @@
+{
+  "uuid": "n8n-mock-api",
+  "lastMigration": 32,
+  "name": "Enrichment API Mock",
+  "endpointPrefix": "api",
+  "port": 3000,
+  "routes": [
+    {
+      "method": "get",
+      "endpoint": "enrich",
+      "responses": [
+        {
+          "statusCode": 200,
+          "body": "{\n  \"email\": \"{{queryParam 'email'}}\",\n  \"person\": {\n    \"first_name\": \"John\", \"last_name\": \"Doe\",\n    \"role\": \"Senior Developer\",\n    \"linkedin\": \"linkedin.com/in/johndoe\"\n  },\n  \"company\": {\n    \"name\": \"Mock Corp\",\n    \"sector\": \"Tech\",\n    \"employees\": 500\n  }\n}",
+          "headers": [{ "key": "Content-Type", "value": "application/json" }]
+        }
+      ]
+    }
+  ]
+}

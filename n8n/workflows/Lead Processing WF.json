@@ -1,0 +1,1573 @@
+{
+  "name": "Lead Processing WF",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "select",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "leads",
+          "mode": "list",
+          "cachedResultName": "leads"
+        },
+        "limit": 1,
+        "where": {
+          "values": [
+            {
+              "column": "dedup_hash",
+              "value": "={{ $json.dedup_hash }}"
+            }
+          ]
+        },
+        "options": {
+          "outputColumns": [
+            "id",
+            "status"
+          ]
+        }
+      },
+      "id": "56e930bc-b2f6-4fd6-98e4-1be1fec9165d",
+      "name": "PostgreSQL – Comprobar Duplicado",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        -432,
+        -240
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "ahDg84fXlMYqUivC",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "dup-check",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "51f85258-f2c7-4a5f-ab01-9e5a0ddca02f",
+      "name": "¿Es Duplicado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -208,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=http://mock-enrichment:3001/api/enrich",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "email",
+              "value": "={{ $('Parsear').item.json.lead.email }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 8000
+        }
+      },
+      "id": "db79e41e-37ee-4f49-a892-9367776043be",
+      "name": "Enriquecer – API Externa",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        240,
+        -144
+      ],
+      "retryOnFail": true,
+      "notes": "Si la API falla o el ENRICHMENT_API_KEY está vacío,\nneverError:true evita que el workflow falle.\nEl nodo siguiente maneja la respuesta vacía."
+    },
+    {
+      "parameters": {
+        "mode": "exchange",
+        "exchange": "leads",
+        "exchangeType": "topic",
+        "routingKey": "lead.enriched",
+        "sendInputData": false,
+        "message": "={{ JSON.stringify({ \n  lead: $('Unir Datos de Enriquecimiento').item.json.lead, \n  dedup_hash: $('Unir Datos de Enriquecimiento').item.json.dedup_hash, \n  external_id: $json.external_id, \n  enriched_data: $('Unir Datos de Enriquecimiento').item.json.enriched_data \n}) }}",
+        "options": {}
+      },
+      "id": "d726b200-6af6-49d0-917f-945046e7a717",
+      "name": "RabbitMQ – Publicar leads.enriched",
+      "type": "n8n-nodes-base.rabbitmq",
+      "typeVersion": 1,
+      "position": [
+        1360,
+        128
+      ],
+      "credentials": {
+        "rabbitmq": {
+          "id": "iCBS6ALiWliy1jtp",
+          "name": "RabbitMQ account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "queue": "leads.processing",
+        "options": {
+          "acknowledge": "laterMessageNode"
+        }
+      },
+      "type": "n8n-nodes-base.rabbitmqTrigger",
+      "typeVersion": 1,
+      "position": [
+        -880,
+        -176
+      ],
+      "id": "db70e5e2-867c-430e-bd38-d00c000bda9b",
+      "name": "RabbitMQ Trigger",
+      "credentials": {
+        "rabbitmq": {
+          "id": "iCBS6ALiWliy1jtp",
+          "name": "RabbitMQ account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={{ {...$json.content.parseJson(), _started_at: $now } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -656,
+        -176
+      ],
+      "id": "bd80bc3a-744c-4841-8af7-8a475c878073",
+      "name": "Parsear"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "advanced": true,
+        "mergeByFields": {
+          "values": [
+            {
+              "field1": "email",
+              "field2": "lead.email_normalized"
+            }
+          ]
+        },
+        "joinMode": "enrichInput2",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        688,
+        128
+      ],
+      "id": "51eeec15-3954-4d17-964d-97b8bd3f03d9",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "124cf5da-0404-42c5-950f-0c6f49ea5b94",
+              "leftValue": "={{ $json.error ?? '' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        464,
+        -144
+      ],
+      "id": "287281a6-b971-468c-b7f2-ebf967171b7d",
+      "name": "¿Error de API?"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "500794d1-d2c1-4faa-88b5-79ccce296862",
+              "name": "lead",
+              "value": "={{ $json.lead }}",
+              "type": "object"
+            },
+            {
+              "id": "8ef02d1c-ed21-4c90-9e68-88868950bb12",
+              "name": "dedup_hash",
+              "value": "={{ $json.dedup_hash }}",
+              "type": "string"
+            },
+            {
+              "id": "289a1161-ee8c-421d-bcb3-456e77532c8e",
+              "name": "external_id",
+              "value": "={{ $json.external_id }}",
+              "type": "string"
+            },
+            {
+              "id": "81903d94-a31e-4366-b1f2-e439884edab3",
+              "name": "enriched_data",
+              "value": "={{\n{ person:$json.person, company:$json.company }\n}}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        912,
+        128
+      ],
+      "id": "397c8037-0824-40d0-b199-83c1e4afecfe",
+      "name": "Unir Datos de Enriquecimiento"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "leads",
+          "mode": "list",
+          "cachedResultName": "leads"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "retry_count": "={{ $json.error_class.attempt }}",
+            "id": "={{ $('PostgreSQL – INSERT processing').item.json.id }}",
+            "status": "enriched_partial",
+            "processed_at": "={{ $now }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "external_id",
+              "displayName": "external_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "dedup_hash",
+              "displayName": "dedup_hash",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "email_normalized",
+              "displayName": "email_normalized",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "first_name",
+              "displayName": "first_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "last_name",
+              "displayName": "last_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "company",
+              "displayName": "company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "utm_source",
+              "displayName": "utm_source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "utm_medium",
+              "displayName": "utm_medium",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "utm_campaign",
+              "displayName": "utm_campaign",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "enriched_data",
+              "displayName": "enriched_data",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "object",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "crm_id",
+              "displayName": "crm_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "crm_synced_at",
+              "displayName": "crm_synced_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "raw_payload",
+              "displayName": "raw_payload",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "object",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "error_message",
+              "displayName": "error_message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "retry_count",
+              "displayName": "retry_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ingested_at",
+              "displayName": "ingested_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "processed_at",
+              "displayName": "processed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1136,
+        -96
+      ],
+      "id": "56562e2f-9b40-4a04-81e3-c27c8b5358f0",
+      "name": "Actualizar lead status",
+      "credentials": {
+        "postgres": {
+          "id": "ahDg84fXlMYqUivC",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "deleteMessage"
+      },
+      "type": "n8n-nodes-base.rabbitmq",
+      "typeVersion": 1.1,
+      "position": [
+        1360,
+        -96
+      ],
+      "id": "78254a6a-5b60-4cd4-8073-2cb2dfa9be3b",
+      "name": "RabbitMQ ACK [Error API]",
+      "credentials": {
+        "rabbitmq": {
+          "id": "iCBS6ALiWliy1jtp",
+          "name": "RabbitMQ account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "deleteMessage"
+      },
+      "type": "n8n-nodes-base.rabbitmq",
+      "typeVersion": 1.1,
+      "position": [
+        16,
+        -336
+      ],
+      "id": "1e637e78-8f2c-4f20-a239-8b693b834651",
+      "name": "RabbitMQ ACK [Duplicado]",
+      "credentials": {
+        "rabbitmq": {
+          "id": "iCBS6ALiWliy1jtp",
+          "name": "RabbitMQ account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "deleteMessage"
+      },
+      "type": "n8n-nodes-base.rabbitmq",
+      "typeVersion": 1.1,
+      "position": [
+        1584,
+        128
+      ],
+      "id": "6f2d929e-b921-480a-b945-7a1ed36c6ba2",
+      "name": "RabbitMQ ACK",
+      "credentials": {
+        "rabbitmq": {
+          "id": "iCBS6ALiWliy1jtp",
+          "name": "RabbitMQ account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads\nSET\n  enriched_data = '{{ JSON.stringify($json.enriched_data) }}'::jsonb,\n  company       = '{{ $json.lead.company }}',\n  status        = 'enriched',\n  processed_at  = NOW()\nWHERE external_id = '{{ $json.external_id }}'\nRETURNING id, external_id, status;",
+        "options": {}
+      },
+      "id": "458151d2-ebfe-4459-bc5f-ecef05e7a9b8",
+      "name": "PostgreSQL – UPDATE enriched",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        1136,
+        128
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "ahDg84fXlMYqUivC",
+          "name": "Postgres account"
+        }
+      },
+      "notes": "ON CONFLICT DO NOTHING: si el external_id ya existe (reintento),\nno falla ni duplica. La idempotencia es clave en sistemas de cola."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO leads (\n  external_id, dedup_hash,\n  email, email_normalized,\n  first_name, last_name, phone, company,\n  source, utm_source, utm_medium, utm_campaign,\n  raw_payload, ingested_at, status\n) VALUES (\n  '{{ $('Parsear').item.json.external_id }}',\n  '{{ $('Parsear').item.json.dedup_hash }}',\n  '{{ $('Parsear').item.json.lead.email }}',\n  '{{ $('Parsear').item.json.lead.email_normalized }}',\n  '{{ $('Parsear').item.json.lead.first_name }}',\n  '{{ $('Parsear').item.json.lead.last_name }}',\n  '{{ $('Parsear').item.json.lead.phone }}',\n  '{{ $('Parsear').item.json.lead.company }}',\n  '{{ $('Parsear').item.json.lead.source }}',\n  '{{ $('Parsear').item.json.lead.utm_source }}',\n  '{{ $('Parsear').item.json.lead.utm_medium }}',\n  '{{ $('Parsear').item.json.lead.utm_campaign }}',\n  '{{ JSON.stringify($('Parsear').item.json.lead.raw_payload) }}'::jsonb,\n  '{{ $('Parsear').item.json.lead.ingested_at }}'::timestamptz,\n  'processing'\n)\nRETURNING id;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        16,
+        -144
+      ],
+      "id": "f1f47a7a-a0db-44a1-86ae-2c4e35b2d389",
+      "name": "PostgreSQL – INSERT processing",
+      "credentials": {
+        "postgres": {
+          "id": "ahDg84fXlMYqUivC",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return {\n  json: {\n    ...$('Parsear').item.json,\n    id: $('PostgreSQL – INSERT processing').item.json.id,\n    meta: {\n      attempt:          $json.error_class.attempt + 1,\n      first_attempt_at: $json.meta?.first_attempt_at ?? new Date().toISOString(),\n      last_error:       $json.error_class.errorMessage\n    }\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        688,
+        -192
+      ],
+      "id": "19b09afe-3bbc-4a1a-a784-0b3588038295",
+      "name": "Clasificar error"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "fe9e036c-3018-4174-b16f-0afc464fbf5e",
+                    "leftValue": "={{ $json.error_class.exhausted }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Intentos Agotados"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "c8838993-6c9b-43ea-aae8-a37fe197d4e3",
+                    "leftValue": "={{ $json.error_class.isRetryable }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "false",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "No Reintentable"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.error_class.isRetryable }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    },
+                    "id": "a3b2318c-abda-429a-a318-d7005ff1bb37"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Reintentable"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        912,
+        -208
+      ],
+      "id": "5fb74ee3-342b-4799-8b77-cbe006c8b22e",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "amount": "={{ $json.error_classification.waitSeconds }}"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1136,
+        -288
+      ],
+      "id": "4bc05ab0-64f9-47aa-be27-5a2ed21dcfef",
+      "name": "Wait",
+      "webhookId": "17719668-e617-4748-89d2-7ca5864ee0b1"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "leads",
+          "mode": "list",
+          "cachedResultName": "leads"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "retry_count": "={{ $json.error_class.attempt }}",
+            "id": "={{ $('PostgreSQL – INSERT processing').item.json.id }}",
+            "status": "enriched_partial",
+            "processed_at": "={{ $now }}",
+            "error_message": "={{ $json.error_class.errorMessage }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "external_id",
+              "displayName": "external_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "dedup_hash",
+              "displayName": "dedup_hash",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "email_normalized",
+              "displayName": "email_normalized",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "first_name",
+              "displayName": "first_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "last_name",
+              "displayName": "last_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "company",
+              "displayName": "company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "utm_source",
+              "displayName": "utm_source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "utm_medium",
+              "displayName": "utm_medium",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "utm_campaign",
+              "displayName": "utm_campaign",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "enriched_data",
+              "displayName": "enriched_data",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "object",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "crm_id",
+              "displayName": "crm_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "crm_synced_at",
+              "displayName": "crm_synced_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "raw_payload",
+              "displayName": "raw_payload",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "object",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "error_message",
+              "displayName": "error_message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "retry_count",
+              "displayName": "retry_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ingested_at",
+              "displayName": "ingested_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "processed_at",
+              "displayName": "processed_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1360,
+        -288
+      ],
+      "id": "e4746167-cffe-4e95-a419-fb0852dffc12",
+      "name": "Actualizar lead status1",
+      "credentials": {
+        "postgres": {
+          "id": "ahDg84fXlMYqUivC",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return {\n  json: {\n    ...$('Parsear').item.json,\n    meta: {\n      attempt:          $json.error_class.attempt + 1,\n      first_attempt_at: $json.meta?.first_attempt_at ?? new Date().toISOString(),\n      last_error:       $json.error_class.errorMessage\n    }\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1584,
+        -288
+      ],
+      "id": "6518dd18-2273-40fd-9077-3f124498054e",
+      "name": "Preparar re-encolado"
+    },
+    {
+      "parameters": {
+        "mode": "exchange",
+        "exchange": "leads",
+        "exchangeType": "topic",
+        "routingKey": "lead.recieved",
+        "sendInputData": false,
+        "message": "={{ JSON.stringify({ \n  lead: $('Parsear').item.json,\n  id: {{ $('PostgreSQL – INSERT processing').item.json.id }}\n}) }}",
+        "options": {}
+      },
+      "id": "35bb7c7e-ce64-4d27-9ada-e1600b7c8e14",
+      "name": "RabbitMQ – Publicar leads.enriched1",
+      "type": "n8n-nodes-base.rabbitmq",
+      "typeVersion": 1,
+      "position": [
+        1808,
+        -288
+      ],
+      "credentials": {
+        "rabbitmq": {
+          "id": "iCBS6ALiWliy1jtp",
+          "name": "RabbitMQ account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "deleteMessage"
+      },
+      "type": "n8n-nodes-base.rabbitmq",
+      "typeVersion": 1.1,
+      "position": [
+        2032,
+        -288
+      ],
+      "id": "3fe7ccaf-aaa3-434e-bb22-7420913b49f1",
+      "name": "RabbitMQ ACK1",
+      "credentials": {
+        "rabbitmq": {
+          "id": "iCBS6ALiWliy1jtp",
+          "name": "RabbitMQ account"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "Merge": [
+      {
+        "json": {
+          "lead": {
+            "email": "jane@empresa.com",
+            "email_normalized": "jane@empresa.com",
+            "phone": "",
+            "first_name": "Jane",
+            "last_name": "Doe",
+            "company": "",
+            "source": "web_form",
+            "utm_source": "",
+            "utm_medium": "",
+            "utm_campaign": "",
+            "ingested_at": "2026-03-21T19:43:11.857Z",
+            "raw_payload": {
+              "email": "jane@empresa.com",
+              "first_name": "Jane",
+              "last_name": "Doe",
+              "source": "web_form"
+            }
+          },
+          "dedup_hash": "179340a8e4516226e311df111e4e09e3046a496494ced264b88ebd7b6205bf52",
+          "external_id": "e84b3b58-016f-4373-8d59-60c9f5ae423c",
+          "_started_at": "2026-03-21T20:43:44.603+01:00",
+          "email": "jane@empresa.com",
+          "person": {
+            "first_name": "John",
+            "last_name": "Doe",
+            "role": "Senior Developer",
+            "linkedin": "linkedin.com/in/johndoe"
+          },
+          "company": {
+            "name": "Mock Corp",
+            "sector": "Tech",
+            "employees": 500
+          }
+        },
+        "binary": {},
+        "pairedItem": [
+          {
+            "item": 0,
+            "input": 1
+          },
+          {
+            "item": 0
+          }
+        ]
+      }
+    ],
+    "Unir Datos de Enriquecimiento": [
+      {
+        "json": {
+          "lead": {
+            "email": "jane@empresa.com",
+            "email_normalized": "jane@empresa.com",
+            "phone": "",
+            "first_name": "Jane",
+            "last_name": "Doe",
+            "company": "",
+            "source": "web_form",
+            "utm_source": "",
+            "utm_medium": "",
+            "utm_campaign": "",
+            "ingested_at": "2026-03-21T19:43:11.857Z",
+            "raw_payload": {
+              "email": "jane@empresa.com",
+              "first_name": "Jane",
+              "last_name": "Doe",
+              "source": "web_form"
+            }
+          },
+          "dedup_hash": "179340a8e4516226e311df111e4e09e3046a496494ced264b88ebd7b6205bf52",
+          "external_id": "e84b3b58-016f-4373-8d59-60c9f5ae423c",
+          "enriched_data": {
+            "person": {
+              "first_name": "John",
+              "last_name": "Doe",
+              "role": "Senior Developer",
+              "linkedin": "linkedin.com/in/johndoe"
+            },
+            "company": {
+              "name": "Mock Corp",
+              "sector": "Tech",
+              "employees": 500
+            }
+          }
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "PostgreSQL – Comprobar Duplicado": [
+      {
+        "json": {},
+        "pairedItem": [
+          {
+            "item": 0,
+            "input": 0
+          }
+        ]
+      }
+    ],
+    "Enriquecer – API Externa": [
+      {
+        "json": {
+          "email": "jane@empresa.com",
+          "person": {
+            "first_name": "John",
+            "last_name": "Doe",
+            "role": "Senior Developer",
+            "linkedin": "linkedin.com/in/johndoe"
+          },
+          "company": {
+            "name": "Mock Corp",
+            "sector": "Tech",
+            "employees": 500
+          }
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "RabbitMQ Trigger": [
+      {
+        "json": {
+          "fields": {
+            "deliveryTag": 1,
+            "redelivered": false,
+            "exchange": "leads",
+            "routingKey": "lead.received",
+            "messageCount": 0
+          },
+          "properties": {
+            "headers": {}
+          },
+          "content": "{\"lead\":{\"email\":\"jane@empresa.com\",\"email_normalized\":\"jane@empresa.com\",\"phone\":\"\",\"first_name\":\"Jane\",\"last_name\":\"Doe\",\"company\":\"\",\"source\":\"web_form\",\"utm_source\":\"\",\"utm_medium\":\"\",\"utm_campaign\":\"\",\"ingested_at\":\"2026-03-21T19:43:11.857Z\",\"raw_payload\":{\"email\":\"jane@empresa.com\",\"first_name\":\"Jane\",\"last_name\":\"Doe\",\"source\":\"web_form\"}},\"dedup_hash\":\"179340a8e4516226e311df111e4e09e3046a496494ced264b88ebd7b6205bf52\",\"external_id\":\"e84b3b58-016f-4373-8d59-60c9f5ae423c\"}"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "Parsear": [
+      {
+        "json": {
+          "lead": {
+            "email": "jane@empresa.com",
+            "email_normalized": "jane@empresa.com",
+            "phone": "",
+            "first_name": "Jane",
+            "last_name": "Doe",
+            "company": "",
+            "source": "web_form",
+            "utm_source": "",
+            "utm_medium": "",
+            "utm_campaign": "",
+            "ingested_at": "2026-03-21T19:43:11.857Z",
+            "raw_payload": {
+              "email": "jane@empresa.com",
+              "first_name": "Jane",
+              "last_name": "Doe",
+              "source": "web_form"
+            }
+          },
+          "dedup_hash": "179340a8e4516226e311df111e4e09e3046a496494ced264b88ebd7b6205bf52",
+          "external_id": "e84b3b58-016f-4373-8d59-60c9f5ae423c",
+          "_started_at": "2026-03-21T20:43:44.603+01:00"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "PostgreSQL – UPDATE enriched": [
+      {
+        "json": {
+          "id": "1dfa03a8-da02-4bae-bcab-1dcabc105e09",
+          "external_id": "e84b3b58-016f-4373-8d59-60c9f5ae423c",
+          "status": "enriched"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "PostgreSQL – INSERT processing": [
+      {
+        "json": {
+          "id": "1dfa03a8-da02-4bae-bcab-1dcabc105e09"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "PostgreSQL – Comprobar Duplicado": {
+      "main": [
+        [
+          {
+            "node": "¿Es Duplicado?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Es Duplicado?": {
+      "main": [
+        [
+          {
+            "node": "RabbitMQ ACK [Duplicado]",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "PostgreSQL – INSERT processing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enriquecer – API Externa": {
+      "main": [
+        [
+          {
+            "node": "¿Error de API?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RabbitMQ – Publicar leads.enriched": {
+      "main": [
+        [
+          {
+            "node": "RabbitMQ ACK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RabbitMQ Trigger": {
+      "main": [
+        [
+          {
+            "node": "Parsear",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parsear": {
+      "main": [
+        [
+          {
+            "node": "PostgreSQL – Comprobar Duplicado",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Unir Datos de Enriquecimiento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Error de API?": {
+      "main": [
+        [
+          {
+            "node": "Clasificar error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unir Datos de Enriquecimiento": {
+      "main": [
+        [
+          {
+            "node": "PostgreSQL – UPDATE enriched",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actualizar lead status": {
+      "main": [
+        [
+          {
+            "node": "RabbitMQ ACK [Error API]",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PostgreSQL – UPDATE enriched": {
+      "main": [
+        [
+          {
+            "node": "RabbitMQ – Publicar leads.enriched",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PostgreSQL – INSERT processing": {
+      "main": [
+        [
+          {
+            "node": "Enriquecer – API Externa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clasificar error": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Actualizar lead status",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Actualizar lead status",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Actualizar lead status1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actualizar lead status1": {
+      "main": [
+        [
+          {
+            "node": "Preparar re-encolado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RabbitMQ – Publicar leads.enriched1": {
+      "main": [
+        [
+          {
+            "node": "RabbitMQ ACK1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar re-encolado": {
+      "main": [
+        [
+          {
+            "node": "RabbitMQ – Publicar leads.enriched1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "Ef2tiyXZ0V1pO3UqbuF8E"
+  },
+  "versionId": "46a78903-bcae-406e-92ef-7d610b3d05ed",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "5802f9ffa8035643c254dac9e70c7558cce708bba6f0a8205b16cdfdc5f6b1c5"
+  },
+  "id": "gGp4udbnI4m9JPOWOoN0p",
+  "tags": []
+}
